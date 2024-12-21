@@ -435,4 +435,4 @@ dynamodb.getItem({ ConsistentRead: false })
 - Examples include DNS, distributed NoSQL databases, and systems prioritizing speed and fault tolerance over immediate accuracy.
 - Over time, the system guarantees that all replicas converge to the same state.
 
-Let me know if you'd like further clarification! 😊
+![image](https://github.com/user-attachments/assets/a968dce6-2e17-4246-9db1-1edaa867143a)
