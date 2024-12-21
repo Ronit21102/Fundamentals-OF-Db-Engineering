@@ -112,4 +112,327 @@ In summary, yes, PostgreSQL creates a new version of a row for every update, lev
 ![image](https://github.com/user-attachments/assets/865a9583-f383-4e78-9eb6-79af6ce501b8)
 ![image](https://github.com/user-attachments/assets/4674a8ad-b5ad-4315-9cbb-6f96018f6542)
 
+**Isolation levels** are a key concept in database systems, defining how transaction concurrency is managed to ensure data consistency. They dictate how and when changes made by one transaction become visible to others and are a critical component of **ACID (Atomicity, Consistency, Isolation, Durability)** properties. 
 
+---
+
+### **Key Problems Addressed by Isolation Levels**
+1. **Dirty Reads:** Reading uncommitted changes made by another transaction.
+2. **Non-Repeatable Reads:** Re-reading data and finding it changed due to another committed transaction.
+3. **Phantom Reads:** A query returns different rows on subsequent executions because another transaction inserted or deleted rows.
+
+---
+
+### **Isolation Levels (ANSI SQL Standards)**
+
+#### 1. **Read Uncommitted**
+- **Behavior:** Transactions can read uncommitted changes made by other transactions.
+- **Issues:** 
+  - Dirty reads are possible.
+  - Non-repeatable reads and phantom reads can occur.
+- **Use Case:** Rarely used due to its lack of safety. Suitable for scenarios where performance matters more than accuracy (e.g., non-critical logging systems).
+
+**Example:**
+- **Transaction A:** Updates a row but hasn’t committed.
+- **Transaction B:** Reads the uncommitted value, which might later be rolled back.
+
+---
+
+#### 2. **Read Committed**
+- **Behavior:** Transactions can only read committed changes made by other transactions. Each read sees the most recent committed value.
+- **Issues:**
+  - Non-repeatable reads can occur because data can change between reads.
+  - Phantom reads are possible.
+- **Use Case:** Default in many systems (e.g., PostgreSQL, SQL Server) for a good balance of performance and consistency.
+
+**Example:**
+- **Transaction A:** Commits a change to a row.
+- **Transaction B:** Reads the row before and after Transaction A’s commit, observing different values.
+
+---
+
+#### 3. **Repeatable Read**
+- **Behavior:** Ensures that if a transaction reads a row once, it will see the same data if it re-reads it. Prevents dirty reads and non-repeatable reads.
+- **Issues:**
+  - Phantom reads can still occur because new rows might be added or deleted by other transactions.
+- **Use Case:** Suitable for use cases like financial applications where consistent reads are crucial.
+
+**Example:**
+- **Transaction A:** Reads a row.
+- **Transaction B:** Updates the row and commits.
+- **Transaction A:** Re-reads the row and still sees the original value.
+
+---
+
+#### 4. **Serializable**
+- **Behavior:** The highest level of isolation. Transactions are executed as if they were serialized, one after the other, ensuring complete consistency.
+- **Issues:**
+  - High performance cost due to locking or aborting conflicting transactions.
+- **Use Case:** Critical systems requiring strict consistency (e.g., banking systems).
+
+**Example:**
+- **Transaction A:** Queries for all accounts with balances > $10,000.
+- **Transaction B:** Inserts a new account with a balance of $15,000.
+- **Transaction A:** Will not see the new account until it completes its transaction.
+
+---
+
+### **Comparison Table**
+
+| Isolation Level      | Dirty Reads | Non-Repeatable Reads | Phantom Reads   |
+|-----------------------|-------------|-----------------------|-----------------|
+| **Read Uncommitted** | Yes         | Yes                   | Yes             |
+| **Read Committed**   | No          | Yes                   | Yes             |
+| **Repeatable Read**  | No          | No                    | Yes             |
+| **Serializable**     | No          | No                    | No              |
+
+---
+
+### **Practical Example in SQL**
+Suppose we have a table `accounts`:
+
+```sql
+CREATE TABLE accounts (
+    id INT PRIMARY KEY,
+    balance INT
+);
+INSERT INTO accounts VALUES (1, 100), (2, 200);
+```
+
+#### Read Committed Example:
+- **Transaction 1:**
+  ```sql
+  BEGIN;
+  UPDATE accounts SET balance = balance - 50 WHERE id = 1;
+  -- No COMMIT yet
+  ```
+- **Transaction 2:**
+  ```sql
+  BEGIN;
+  SELECT balance FROM accounts WHERE id = 1; -- Will see the original value (100)
+  COMMIT;
+  ```
+  
+#### Repeatable Read Example:
+- **Transaction 1:**
+  ```sql
+  BEGIN;
+  SELECT balance FROM accounts WHERE id = 1; -- Reads balance = 100
+  ```
+- **Transaction 2:**
+  ```sql
+  BEGIN;
+  UPDATE accounts SET balance = 150 WHERE id = 1;
+  COMMIT;
+  ```
+- **Transaction 1:**
+  ```sql
+  SELECT balance FROM accounts WHERE id = 1; -- Still sees 100 due to Repeatable Read
+  ```
+
+---
+
+### **Summary**
+Isolation levels provide a mechanism to balance performance and consistency in a database. They are chosen based on the application's tolerance for concurrency issues like dirty reads, non-repeatable reads, or phantom reads. Understanding their trade-offs is essential for designing robust systems.
+Let’s dive deeper into **Repeatable Read** and explain it step by step with a clear example to help you understand.
+
+---
+
+### **What is Repeatable Read?**
+
+**Repeatable Read** ensures that if a transaction reads a row once, it will always see the same value for that row, even if other transactions modify it. This prevents **dirty reads** (reading uncommitted changes) and **non-repeatable reads** (seeing different values when re-reading the same data).
+
+However, **phantom reads** (new rows appearing in the result set due to inserts/deletes by other transactions) can still occur.
+
+---
+
+### **Key Characteristics:**
+1. Once a transaction reads a row, that row cannot be modified by other transactions until the first transaction finishes.
+2. It provides a stable view of the rows that were read during the transaction.
+3. It does NOT lock the entire table, so new rows can still be added or deleted, leading to phantom reads.
+
+---
+
+### **Example Step by Step**
+
+#### Setup:
+Imagine a bank system with the following `accounts` table:
+
+| **id** | **balance** |
+|--------|-------------|
+| 1      | 100         |
+| 2      | 200         |
+
+---
+
+#### Scenario: Two transactions running concurrently
+
+**Transaction 1:**
+- Starts first and is operating under the **Repeatable Read** isolation level.
+- Reads the balance of `id = 1`.
+
+**Transaction 2:**
+- Runs after Transaction 1 and tries to modify the same row.
+
+---
+
+#### Step-by-Step Execution
+
+1. **Transaction 1 Begins:**
+   ```sql
+   BEGIN TRANSACTION;
+   SELECT balance FROM accounts WHERE id = 1; -- Reads balance = 100
+   ```
+
+2. **Transaction 2 Tries to Update:**
+   ```sql
+   BEGIN TRANSACTION;
+   UPDATE accounts SET balance = 150 WHERE id = 1;
+   -- Transaction 2 is BLOCKED because Transaction 1 already read the row.
+   ```
+
+   - Since Transaction 1 is operating under **Repeatable Read**, it ensures the row it read (`id = 1`) cannot be modified by another transaction until Transaction 1 completes.
+
+3. **Transaction 1 Re-reads:**
+   ```sql
+   SELECT balance FROM accounts WHERE id = 1; -- Still sees balance = 100
+   ```
+
+   - The value remains **100**, ensuring **repeatable reads** for that row, even though another transaction attempted to modify it.
+
+4. **Transaction 1 Commits:**
+   ```sql
+   COMMIT;
+   ```
+
+5. **Transaction 2 Proceeds:**
+   - Now that Transaction 1 is finished, Transaction 2 can proceed:
+     ```sql
+     UPDATE accounts SET balance = 150 WHERE id = 1;
+     COMMIT;
+     ```
+
+---
+
+### **Why Use Repeatable Read?**
+
+- **Prevents Non-Repeatable Reads:** Ensures that if you read a row multiple times in a transaction, you will always see the same value, even if another transaction tries to change it.
+- **Ensures Data Consistency:** Prevents seeing inconsistent or partial updates to rows.
+
+---
+
+### **Limitations of Repeatable Read**
+- **Phantom Reads:** 
+  - If a query involves a range of rows (e.g., `SELECT * FROM accounts WHERE balance > 100`), other transactions can still insert or delete rows that match the range.
+  - Example:
+    - **Transaction 1:** Reads rows where `balance > 100`.
+    - **Transaction 2:** Inserts a new row with `balance = 150` and commits.
+    - **Transaction 1:** Re-executes the query and sees a "phantom" row.
+
+---
+
+### **Summary**
+- In **Repeatable Read**, any data you read will remain unchanged for the duration of your transaction.
+- It protects against **dirty reads** and **non-repeatable reads**, but not **phantom reads**.
+- It’s ideal for scenarios where consistent reading of the same rows is critical, such as financial transactions or inventory systems.
+
+**Eventual Consistency** is a consistency model used primarily in distributed systems to balance availability and performance with consistency. It is one of the key concepts in **CAP Theorem**, which states that in a distributed system, you can achieve at most two of the three: **Consistency**, **Availability**, and **Partition Tolerance**.
+
+---
+
+### **What is Eventual Consistency?**
+
+- **Definition:** Eventual consistency guarantees that if no new updates are made to a distributed database, all replicas (copies of the data) will eventually converge to the same state. 
+- It does **not** guarantee that all reads reflect the latest write immediately. Instead, it guarantees that the system will **eventually** become consistent.
+
+---
+
+### **Characteristics:**
+1. **Temporary Inconsistency:** Reads might return outdated (stale) data shortly after a write.
+2. **Eventual Convergence:** Over time, replicas synchronize, and all nodes reflect the same data if no further updates occur.
+3. **Trade-off:** Sacrifices strong consistency for higher availability and partition tolerance.
+
+---
+
+### **When is Eventual Consistency Used?**
+- Distributed databases and systems where **high availability** and **partition tolerance** are more critical than immediate consistency.
+- Examples: DNS, NoSQL databases like Cassandra, DynamoDB, Riak.
+
+---
+
+### **How It Works?**
+- When a write operation occurs, the change is applied to one replica and then propagated to other replicas asynchronously.
+- During this propagation, different replicas might temporarily show different states.
+- Over time, synchronization mechanisms (e.g., gossip protocols or background replication) ensure all replicas converge to the same state.
+
+---
+
+### **Real-World Example:**
+**Use Case: Social Media Like Button**
+
+- **Scenario:** Alice likes a post on social media.
+  - The "like" action is recorded on a replica in her region (say, North America).
+  - This "like" is asynchronously propagated to other replicas worldwide (e.g., Europe, Asia).
+- **Result:**
+  - Bob (in Europe) might see the old count of likes (stale data) for a few seconds or minutes until his replica updates.
+  - Eventually, all replicas converge, and everyone sees the same like count.
+
+---
+
+### **Eventual Consistency in Action**
+1. **Write Operation:**
+   - A user updates data (e.g., adds a like or modifies a document).
+   - The change is immediately acknowledged on the primary replica.
+2. **Asynchronous Replication:**
+   - The update propagates to other replicas in the background.
+   - Until all replicas synchronize, reads from different replicas might return different values.
+3. **Convergence:**
+   - After all replicas synchronize, the system achieves consistency.
+
+---
+
+### **Advantages:**
+1. **High Availability:** Reads and writes can continue even if some replicas are down.
+2. **Scalability:** Suitable for systems distributed across multiple regions.
+3. **Performance:** Writes and reads are fast since updates are not blocked by synchronization.
+
+---
+
+### **Disadvantages:**
+1. **Stale Reads:** Users might see outdated data.
+2. **Complexity:** Designing systems to handle eventual consistency requires careful handling of conflicts (e.g., when two replicas are updated simultaneously).
+3. **Not Suitable for Strong Consistency Needs:** Applications like banking systems or inventory management might require strong consistency instead.
+
+---
+
+### **Comparison: Eventual Consistency vs. Strong Consistency**
+
+| **Aspect**                | **Eventual Consistency**                            | **Strong Consistency**                            |
+|---------------------------|----------------------------------------------------|--------------------------------------------------|
+| **Data Synchronization**  | Asynchronous                                      | Synchronous                                      |
+| **Stale Reads**           | Possible                                          | Not possible                                    |
+| **Performance**           | High availability and low latency                 | Lower availability and higher latency           |
+| **Use Cases**             | Social media, DNS, content delivery systems       | Banking systems, inventory management, ledgers  |
+
+---
+
+### **Example in DynamoDB (Eventual Consistency Default):**
+
+- When you write to a table in DynamoDB, the write is first acknowledged by a single node.
+- The update is asynchronously propagated to other nodes.
+- A subsequent read might return the old value until all replicas synchronize.
+
+**Query:**
+```bash
+dynamodb.getItem({ ConsistentRead: false }) 
+# Reads might return stale data.
+```
+
+---
+
+### **Summary**
+- **Eventual Consistency** is ideal for applications where availability and performance are critical, and strong consistency isn't necessary.
+- Examples include DNS, distributed NoSQL databases, and systems prioritizing speed and fault tolerance over immediate accuracy.
+- Over time, the system guarantees that all replicas converge to the same state.
+
+Let me know if you'd like further clarification! 😊
