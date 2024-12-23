@@ -438,7 +438,9 @@ dynamodb.getItem({ ConsistentRead: false })
 ![image](https://github.com/user-attachments/assets/a968dce6-2e17-4246-9db1-1edaa867143a)
 
 ---
-Understanding how databases store tables and indexes on disk involves exploring concepts like **pages**, **data structures (B-Trees, etc.)**, and **file organization**. Here’s a detailed explanation:
+
+### **I/O and Caching:**
+- Databases use **buffer pools** (memory caches) to minimize disk I/O.Understanding how databases store tables and indexes on disk involves exploring concepts like **pages**, **data structures (B-Trees, etc.)**, and **file organization**. Here’s a detailed explanation:
 
 ---
 
@@ -522,8 +524,6 @@ Indexes are created to speed up data retrieval. Most databases use **B-Trees** o
 - Tables and indexes are stored in **files** on disk.
 - Each file corresponds to a database object (e.g., a table or an index).
 
-### **I/O and Caching:**
-- Databases use **buffer pools** (memory caches) to minimize disk I/O.
 - Pages are read into memory for operations, reducing the need to access the slower disk repeatedly.
 
 ---
